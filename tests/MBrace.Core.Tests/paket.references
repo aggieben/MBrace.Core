@@ -1,7 +1,9 @@
+FSharp.Core
+
 group Test
-  FSharp.Core
   Microsoft.Net.Test.SDK
   NUnit
   NUnit3TestAdapter
   Unquote
   FsCheck
+  System.Net.Http framework: net48

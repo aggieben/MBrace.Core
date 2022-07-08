@@ -7,6 +7,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{5B058E9C-F21
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "MBrace.Core", "src\MBrace.Core\MBrace.Core.fsproj", "{6F56D9AA-09C6-4602-BEC4-79469129464C}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{4D1C70F7-C170-4256-B5F3-A7D7D822C828}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "MBrace.Core.Tests", "tests\MBrace.Core.Tests\MBrace.Core.Tests.fsproj", "{2BA4B2C5-F570-41D6-9F80-579499EAE9DA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +24,13 @@ Global
 		{6F56D9AA-09C6-4602-BEC4-79469129464C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6F56D9AA-09C6-4602-BEC4-79469129464C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6F56D9AA-09C6-4602-BEC4-79469129464C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2BA4B2C5-F570-41D6-9F80-579499EAE9DA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2BA4B2C5-F570-41D6-9F80-579499EAE9DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2BA4B2C5-F570-41D6-9F80-579499EAE9DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2BA4B2C5-F570-41D6-9F80-579499EAE9DA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{6F56D9AA-09C6-4602-BEC4-79469129464C} = {5B058E9C-F215-4C64-B120-E1B0B132920E}
+		{2BA4B2C5-F570-41D6-9F80-579499EAE9DA} = {4D1C70F7-C170-4256-B5F3-A7D7D822C828}
 	EndGlobalSection
 EndGlobal

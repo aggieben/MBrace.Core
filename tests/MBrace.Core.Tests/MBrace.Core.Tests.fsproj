@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFrameworks>net6;net48</TargetFrameworks>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Utils.fs" />
@@ -15,13 +15,12 @@
     <Compile Include="StoreTests\CloudQueueTests.fs" />
     <Compile Include="StoreTests\CloudDictionaryTests.fs" />
     <Compile Include="CloudTests.fs" />
-    <Compile Include="CloudFlowTests.fs" />
+    <!-- <Compile Include="CloudFlowTests.fs" /> -->
     <Content Include="paket.references" />
-    <None Include="paket.template" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\MBrace.Core\MBrace.Core.fsproj" />
-    <ProjectReference Include="..\..\src\MBrace.Flow\MBrace.Flow.fsproj" />
+    <!-- <ProjectReference Include="..\..\src\MBrace.Flow\MBrace.Flow.fsproj" /> -->
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

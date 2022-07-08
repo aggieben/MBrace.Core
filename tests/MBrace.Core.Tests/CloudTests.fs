@@ -423,8 +423,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     [<Test>]
     member __.``1: Parallel : nonserializable type`` () =
         if __.UsesSerialization then
-            let comp = cloud { 
-                let! _ = Cloud.Parallel [ for _ in 1 .. 5 -> cloud { return new System.Net.WebClient() } ]
+            let comp = cloud {
+                let! _ = Cloud.Parallel [ for _ in 1 .. 5 -> cloud { return new System.Net.Http.HttpClient() } ]
                 return ()
             } 
 
@@ -434,7 +434,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     member __.``1: Parallel : nonserializable object`` () =
         if __.UsesSerialization then
             let comp = cloud { 
-                let! _ = Cloud.Parallel [ for _ in 1 .. 5 -> cloud { return box (new System.Net.WebClient()) } ]
+                let! _ = Cloud.Parallel [ for _ in 1 .. 5 -> cloud { return box (new System.Net.Http.HttpClient()) } ]
                 return ()
             }
 
@@ -444,7 +444,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     member __.``1: Parallel : nonserializable closure`` () =
         if __.UsesSerialization then
             let comp = cloud { 
-                let client = new System.Net.WebClient()
+                let client = new System.Net.Http.HttpClient()
                 let! _ = Cloud.Parallel [ for _ in 1 .. 5 -> cloud { return box client } ]
                 return ()
             }
@@ -842,20 +842,20 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     [<Test>]
     member __.``1: CloudProcess : nonserializable type`` () =
         if __.UsesSerialization then
-            let comp = cloud { return new System.Net.WebClient() }
+            let comp = cloud { return new System.Net.Http.HttpClient() }
             raises<SerializationException> <@ runOnCloud comp @>
 
     [<Test>]
     member __.``1: CloudProcess : nonserializable object`` () =
         if __.UsesSerialization then
-            let comp = cloud { return box (new System.Net.WebClient()) }
+            let comp = cloud { return box (new System.Net.Http.HttpClient()) }
             raises<SerializationException> <@ runOnCloud comp @>
 
     [<Test>]
     member __.``1: CloudProcess : nonserializable closure`` () =
         if __.UsesSerialization then
             let comp = cloud { 
-                let client = new System.Net.WebClient()
+                let client = new System.Net.Http.HttpClient()
                 return! Cloud.CreateProcess(cloud { return box client })
             } 
             

@@ -1,6 +1,5 @@
 source https://api.nuget.org/v3/index.json
-framework: auto-detect
-lowest_matching: true
+framework: net6, net48
 storage: none
 
 nuget FSharp.Core >= 4.3.2
@@ -21,7 +20,6 @@ group Test
   framework: net6, net48
   storage: none
 
-  nuget FSharp.Core ~> 4.7
   nuget NUnit ~> 3.12
   nuget NUnit3TestAdapter ~> 3.16
   nuget Microsoft.Net.Test.SDK ~> 16.4.0
@@ -29,6 +27,7 @@ group Test
   nuget FsCheck ~> 2.14
   nuget Unquote ~> 5.0
   nuget Streams.CSharp >= 0.5.0
+  nuget System.Net.Http ~> 4.3.4
 
 group Fsi
   source https://api.nuget.org/v3/index.json
