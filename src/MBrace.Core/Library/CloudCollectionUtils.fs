@@ -5,6 +5,7 @@ open System
 open System.Collections
 open System.Collections.Generic
 open System.Net
+open System.Net.Http
 open System.IO
 open System.Runtime.Serialization
 open System.Text
@@ -158,14 +159,18 @@ type CloudCollection private () =
     /// <param name="url">Url to HTTP resource.</param>
     /// <param name="encoding">Text encoding used for http resource.</param>
     /// <param name="ensureThatFileExists">Ensure that file exists before returning the collection. Defaults to false.</param>
-    static member OfHttpFile(url : string, [<O;D(null:obj)>]?encoding : Encoding, [<O;D(null:obj)>]?ensureThatFileExists : bool) = async {
+    static member OfHttpFile(url : string, [<O;D(null:obj)>]?encoding : Encoding, [<O;D(null:obj)>]?ensureThatFileExists : bool, ?httpClient : HttpClient) = async {
         if defaultArg ensureThatFileExists false then
             // sanity check; ensure that file exists
-            let webRequest = WebRequest.Create(url)
-            webRequest.Method <- "HEAD"
-            let task = webRequest.GetResponseAsync()
-            use! response = Async.AwaitTaskCorrect task
-            ignore response
+            let client = defaultArg httpClient (new HttpClient())
+            use request = new HttpRequestMessage(HttpMethod.Head, url)
+
+            let! _ = client.SendAsync(request)
+                     |> Async.AwaitTaskCorrect
+
+            match httpClient with
+            | Some _ -> ()
+            | None -> client.Dispose()
 
         return HTTPTextCollection(url, ?encoding = encoding)
     }

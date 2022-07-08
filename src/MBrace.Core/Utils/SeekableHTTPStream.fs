@@ -2,15 +2,19 @@
 
 open System
 open System.IO
-open System.Net
+open System.Net.Http
+open System.Net.Http.Headers
 
 /// Seekable HTTP Stream implementation
 [<Sealed; AutoSerializable(false)>]
-type SeekableHTTPStream(url : string) =
+type SeekableHTTPStream(url : string, ?client : HttpClient) =
     inherit Stream()
-    let mutable request = HttpWebRequest.CreateHttp(url)
-    let mutable response = request.GetResponse()
-    let mutable stream = response.GetResponseStream()
+
+    let httpClient = defaultArg client (new HttpClient())
+    let mutable stream = httpClient.GetStreamAsync(url)
+                         |> Async.AwaitTask
+                         |> Async.RunSync
+
     let mutable length : int64 option = None
     let mutable position = 0L
     let mutable isDisposed = false
@@ -24,17 +28,17 @@ type SeekableHTTPStream(url : string) =
         ensureNotDisposed()
         match length with
         | Some value -> value
-        | None -> 
-            let request = HttpWebRequest.CreateHttp(url)
-            request.Method <- "HEAD"
-            use response = request.GetResponse() 
-            let contentLength = response.ContentLength
-            length <- Some contentLength    
-            contentLength
 
     override self.CanRead = ensureNotDisposed(); true
     override self.CanWrite = ensureNotDisposed(); false
     override self.CanSeek = ensureNotDisposed(); true
+        | None ->
+            use request = new HttpRequestMessage(HttpMethod.Head, url)
+            async {
+                let! response = httpClient.SendAsync request |> Async.AwaitTask
+                length <- response.Content.Headers.ContentLength |> Option.ofNullable
+                return length.Value
+            } |> Async.RunSync
 
     override self.Length = self.GetLength()
 
@@ -44,11 +48,18 @@ type SeekableHTTPStream(url : string) =
         and set (value) = 
             ensureNotDisposed()
             stream.Close()
-            response.Close()
-            request <- HttpWebRequest.CreateHttp(url)
-            request.AddRange(value)
-            response <- request.GetResponse()
-            stream <- response.GetResponseStream()
+
+            use request = new HttpRequestMessage()
+            request.Headers.Range <- RangeHeaderValue(value, Nullable())
+
+            task {
+                let! response = httpClient.SendAsync(request)
+                let! _stream = response.Content.ReadAsStreamAsync()
+                stream <- _stream
+            }
+            |> Async.AwaitTask
+            |> Async.RunSync
+
             position <- value
 
     override self.Seek(offset : int64, origin : SeekOrigin) = 
@@ -76,8 +87,9 @@ type SeekableHTTPStream(url : string) =
             base.Close()
             if stream <> null then
                 stream.Close()
-                response.Close()
             isDisposed <- true
 
     interface IDisposable with
-        member self.Dispose () = self.Close()
+        member self.Dispose () =
+            self.Close()
+            httpClient.Dispose()
