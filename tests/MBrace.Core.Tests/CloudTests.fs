@@ -1,5 +1,5 @@
 ﻿namespace MBrace.Core.Tests
-    
+
 open System
 open System.Threading
 open System.Runtime.Serialization
@@ -18,7 +18,7 @@ open MBrace.Library.CloudCollectionUtils
 /// Suite for testing MBrace parallelism & distribution
 /// <param name="parallelismFactor">Maximum permitted parallel work items permitted in tests.</param>
 /// <param name="delayFactor">
-///     Delay factor in milliseconds used by unit tests. 
+///     Delay factor in milliseconds used by unit tests.
 ///     Use a value that ensures propagation of updates across the cluster.
 /// </param>
 [<TestFixture>]
@@ -33,10 +33,10 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     let runOnCloudCts (workflow : ICloudCancellationTokenSource -> #Cloud<'T>) = self.Run workflow
     let runOnCloudWithLogs (workflow : Cloud<unit>) = self.RunWithLogs workflow
     let runOnCurrentProcess (workflow : Cloud<'T>) = self.RunLocally workflow
-    
-    
+
+
     static let getRefHashCode (t : 'T when 'T : not struct) = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode t
-    
+
     /// Run workflow in the runtime under test
     abstract Run : workflow:Cloud<'T> -> 'T
     /// Run workflow in the runtime under test, with cancellation token source passed to the worker
@@ -83,7 +83,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             |> runOnCloud
 
         test <@ inputs = result @>
-        
+
     [<Test>]
     member __.``1: Parallel : random inputs`` () =
         let checker (ints:int[]) =
@@ -106,8 +106,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             use _foo = { new ICloudDisposable with member __.Dispose () = c.TransactAsync(fun i -> (), i + 1) }
             let! _ = Seq.init parallelismFactor (fun _ -> CloudAtom.Increment c) |> Cloud.Parallel
             return! c.GetValueAsync()
-        } 
-        
+        }
+
         test <@ runOnCloud comp = parallelismFactor @>
         test <@ c.Value = parallelismFactor + 1 @>
 
@@ -120,8 +120,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             with :? InvalidOperationException ->
                 let! x,y = cloud { return 1 } <||> cloud { return 2 }
                 return x + y
-        } 
-        
+        }
+
         test <@ runOnCloud comp = 3 @>
 
     [<Test>]
@@ -142,15 +142,15 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             let cluster i = Array.init nNested (f i) |> Cloud.Parallel
             let! results = Array.init nNested cluster |> Cloud.Parallel
             return Array.concat results |> Array.sum
-        } 
+        }
 
-        let expected = 
-            Seq.init nNested (fun i -> Seq.init nNested (fun j -> i + j + 1)) 
-            |> Seq.concat 
+        let expected =
+            Seq.init nNested (fun i -> Seq.init nNested (fun j -> i + j + 1))
+            |> Seq.concat
             |> Seq.sum
-        
+
         test <@ runOnCloud comp = expected @>
-            
+
     [<Test>]
     member __.``1: Parallel : simple exception`` () =
         let parallelismFactor = parallelismFactor
@@ -158,8 +158,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             let f i = cloud { return if i = parallelismFactor / 2 then invalidOp "failure" else i + 1 }
             let! results = Array.init parallelismFactor f |> Cloud.Parallel
             return Array.sum results
-        } 
-        
+        }
+
         raises<InvalidOperationException> <@ runOnCloud comp @>
 
     [<Test>]
@@ -169,7 +169,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             // test that exception continuation was fired precisely once
             let comp = cloud {
                 let! atom = CloudAtom.New 0
-                try                    
+                try
                     let! _ = Array.init parallelismFactor (fun _ -> cloud { return invalidOp "failure" }) |> Cloud.Parallel
                     return raise <| new AssertionException("Cloud.Parallel should not have completed succesfully.")
                 with :? InvalidOperationException ->
@@ -178,8 +178,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
 
                 do! Cloud.Sleep 500
                 return! atom.GetValueAsync()
-            } 
-            
+            }
+
             test <@ runOnCloud comp = 1 @>)
 
     [<Test>]
@@ -188,7 +188,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
         repeat(fun () ->
             let comp = cloud {
                 let! counter = CloudAtom.New 0
-                let worker i = cloud { 
+                let worker i = cloud {
                     if i = 0 then
                         invalidOp "failure"
                     else
@@ -201,8 +201,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                     return raise <| new AssertionException("Cloud.Parallel should not have completed succesfully.")
                 with :? InvalidOperationException ->
                     return! counter.GetValueAsync()
-            } 
-            
+            }
+
             test <@ runOnCloud comp = 0 @>)
 
     [<Test>]
@@ -227,10 +227,10 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                     do! Cloud.Sleep delayFactor
                     return! counter.GetValueAsync()
 
-            } 
-            
+            }
+
             test <@ runOnCloud comp = 0 @>)
-            
+
 
     [<Test>]
     member __.``1: Parallel : simple cancellation`` () =
@@ -239,7 +239,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             let counter = CloudAtom.New 0 |> runOnCurrentProcess
             let run (cts : ICloudCancellationTokenSource) = cloud {
                 let f i = cloud {
-                    if i = 0 then cts.Cancel() 
+                    if i = 0 then cts.Cancel()
                     do! Cloud.Sleep delayFactor
                     do! CloudAtom.Increment counter |> Local.Ignore
                 }
@@ -247,8 +247,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 let! _ = Array.init 10 f |> Cloud.Parallel
 
                 return ()
-            } 
-            
+            }
+
             raises<OperationCanceledException> <@ runOnCloudCts run @>
             test <@ counter.Value = 0 @>)
 
@@ -285,14 +285,14 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     [<Test>]
     member __.``1: Parallel : MapReduce recursive`` () =
         // naive, binary recursive mapreduce implementation
-        repeat(fun () -> 
+        repeat(fun () ->
             let result = WordCount.run 20 WordCount.mapReduceRec |> runOnCloud
             test <@ result = 100 @>)
 
     [<Test>]
     member __.``1: Parallel : MapReduce balanced`` () =
         // balanced, core implemented MapReduce algorithm
-        repeat(fun () -> 
+        repeat(fun () ->
             let result = WordCount.run 1000 Cloud.Balanced.mapReduceLocal |> runOnCloud
             test <@ result = 5000 @>)
 
@@ -356,7 +356,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 ints
                 |> Cloud.Balanced.collectLocal (fun i -> local { return [(i,1) ; (i,2) ; (i,3)] })
                 |> runOnCloud
-            
+
             test <@ expected = actual @>
 
         Check.QuickThrowOnFail(checker, maxRuns = __.FsCheckMaxTests, shrink = false)
@@ -382,7 +382,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 ints
                 |> Cloud.Balanced.foldBy id (+) (+) (fun _ -> 0)
                 |> runOnCloud
-            
+
             test <@ expected = actual @>
 
         Check.QuickThrowOnFail(checker, maxRuns = __.FsCheckMaxTests, shrink = false)
@@ -395,7 +395,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 ints
                 |> Cloud.Balanced.foldByLocal id (fun x y -> local { return x + y }) (fun x y -> local { return x + y }) (fun _ -> local { return 0 })
                 |> runOnCloud
-            
+
             test <@ expected = actual @>
 
         Check.QuickThrowOnFail(checker, maxRuns = __.FsCheckMaxTests, shrink = false)
@@ -426,14 +426,14 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             let comp = cloud {
                 let! _ = Cloud.Parallel [ for _ in 1 .. 5 -> cloud { return new System.Net.Http.HttpClient() } ]
                 return ()
-            } 
+            }
 
             raises<SerializationException> <@ runOnCloud comp @>
 
     [<Test>]
     member __.``1: Parallel : nonserializable object`` () =
         if __.UsesSerialization then
-            let comp = cloud { 
+            let comp = cloud {
                 let! _ = Cloud.Parallel [ for _ in 1 .. 5 -> cloud { return box (new System.Net.Http.HttpClient()) } ]
                 return ()
             }
@@ -443,7 +443,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     [<Test>]
     member __.``1: Parallel : nonserializable closure`` () =
         if __.UsesSerialization then
-            let comp = cloud { 
+            let comp = cloud {
                 let client = new System.Net.Http.HttpClient()
                 let! _ = Cloud.Parallel [ for _ in 1 .. 5 -> cloud { return box client } ]
                 return ()
@@ -465,10 +465,10 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             let expected = size |> Seq.mapi (fun i b -> (i,b)) |> Seq.filter snd |> Seq.map fst |> set
             let worker i b = cloud { return if b then Some i else None }
             let actual =
-                size 
-                |> Seq.mapi worker 
+                size
+                |> Seq.mapi worker
                 |> Cloud.Choice
-                |> runOnCloud 
+                |> runOnCloud
 
             test <@ match actual with Some r -> expected.Contains r | None -> Set.isEmpty expected @>
 
@@ -486,8 +486,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 }
 
                 return! Array.init parallelismFactor worker |> Cloud.Choice
-            } 
-            
+            }
+
             test <@ runOnCloud comp = None @>
             test <@ count.Value = parallelismFactor @>)
 
@@ -508,8 +508,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 }
 
                 return! Array.init parallelismFactor worker |> Cloud.Choice
-            } 
-            
+            }
+
             test <@ runOnCloud comp = Some 0 @>
             test <@ count.Value = 0 @>)
 
@@ -522,8 +522,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 let! result = Array.init 100 worker |> Cloud.Choice
                 let! _ = CloudAtom.Increment successcounter
                 return result
-            } 
-            
+            }
+
             test <@ runOnCloud comp = Some 42 @>
             // ensure only one success continuation call
             test <@ successcounter.Value = 1 @>)
@@ -547,8 +547,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
 
                 let cluster i = Array.init nNested (worker i) |> Cloud.Choice
                 return! Array.init nNested cluster |> Cloud.Choice
-            } 
-            
+            }
+
             test <@ runOnCloud comp = Some(0,0) @>
             test <@ counter.Value < parallelismFactor / 2 @>)
 
@@ -570,8 +570,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
 
                 let cluster i = Array.init nNested (worker i) |> Cloud.Choice
                 return! Array.init nNested cluster |> Cloud.Choice
-            } 
-            
+            }
+
             raises<InvalidOperationException> <@ runOnCloud comp @>
             test <@ counter.Value = 0 @>)
 
@@ -590,8 +590,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 }
 
                 return! Array.init parallelismFactor worker |> Cloud.Choice
-            } 
-            
+            }
+
             raises<OperationCanceledException> <@ runOnCloudCts mkComp @>
             test <@ counter.Value = 0 @>)
 
@@ -614,8 +614,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 let! result = Array.init parallelismFactor seqWorker |> Cloud.Choice |> Cloud.AsLocal
                 test <@ counter.Value = (parallelismFactor - 1) @>
                 return result
-            } 
-            
+            }
+
             test <@ runOnCloud comp = Some (parallelismFactor / 2) @>)
 
     [<Test>]
@@ -637,8 +637,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 let! result = Array.init parallelismFactor seqWorker |> Local.Choice
                 test <@ counter.Value = parallelismFactor - 1 @>
                 return result
-            } 
-            
+            }
+
             test <@ runOnCloud comp = Some (parallelismFactor / 2) @>)
 
     [<Test>]
@@ -688,7 +688,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 bools
                 |> Cloud.Balanced.forall id
                 |> runOnCloud
-            
+
             test <@ expected = actual @>
 
         Check.QuickThrowOnFail(checker, maxRuns = __.FsCheckMaxTests, shrink = false)
@@ -718,12 +718,12 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     [<Test>]
     member __.``2: Choice : nonserializable closure`` () =
         if __.UsesSerialization then
-            let comp = cloud { 
-                let client = new System.Net.WebClient()
+            let comp = cloud {
+                let client = new System.Net.Http.HttpClient()
                 let! _ = Cloud.Choice [ for _ in 1 .. 5 -> cloud { return Some (box client) } ]
                 return ()
-            } 
-            
+            }
+
             raises<SerializationException> <@ runOnCloud comp @>
 
 
@@ -748,8 +748,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 let! value = count.GetValueAsync()
                 test <@ value = 0 @>
                 return! Cloud.AwaitProcess cloudProcess
-            } 
-            
+            }
+
             test <@ runOnCloud comp = 1 @>)
 
     [<Test>]
@@ -772,8 +772,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 // before the child workflow is properly evaluated
                 let! _ = CloudAtom.Increment count
                 return! Cloud.AwaitProcess cloudProcess
-            } 
-            
+            }
+
             raises<InvalidOperationException> <@ runOnCloud comp @>
             test <@ count.Value = 2 @>)
 
@@ -795,8 +795,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 test <@ value = 1 @>
                 cts.Cancel()
                 return! Cloud.AwaitProcess job
-            } 
-            
+            }
+
             raises<OperationCanceledException> <@ runOnCloud comp @>
             // ensure final increment was cancelled.
             test <@ count.Value = 1 @>)
@@ -819,8 +819,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             let comp = cloud {
                 let! job = Cloud.CreateProcess(Cloud.Sleep (20 * delayFactor))
                 return! Cloud.AwaitProcess(job, timeoutMilliseconds = 1)
-            } 
-            
+            }
+
             raises<TimeoutException> <@ runOnCloud comp @>)
 
     [<Test>]
@@ -830,13 +830,13 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             cts.Cancel()
             let! proc = Cloud.CreateProcess(Cloud.Sleep 5000, cancellationToken = cts.Token)
             do! proc.WaitAsync()
-            try 
+            try
                 let! _ = proc.AwaitResult()
                 return false
             with :? OperationCanceledException ->
                 return true
-        } 
-        
+        }
+
         test <@ runOnCloud comp = true @>
 
     [<Test>]
@@ -854,11 +854,11 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     [<Test>]
     member __.``1: CloudProcess : nonserializable closure`` () =
         if __.UsesSerialization then
-            let comp = cloud { 
+            let comp = cloud {
                 let client = new System.Net.Http.HttpClient()
                 return! Cloud.CreateProcess(cloud { return box client })
-            } 
-            
+            }
+
             raises<SerializationException> <@ runOnCloud comp @>
 
     [<Test>]
@@ -872,8 +872,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             let! procC = Cloud.CreateProcess(mkSleeper 3, cancellationToken = ct)
             let! result = Cloud.WhenAny(procA, procB, procC)
             return result.Result, procA.IsCompleted, procB.IsCompleted, procC.IsCompleted
-        } 
-        
+        }
+
         test <@ runOnCloud comp = (1, true, false, false) @>
 
     [<Test>]
@@ -887,14 +887,14 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
             let! procC = Cloud.CreateProcess(mkSleeper 3, cancellationToken = ct)
             do! Cloud.WhenAll(procA, procB, procC)
             return [|procA ; procB ; procC|] |> Array.forall (fun p -> p.IsCompleted)
-        } 
-        
+        }
+
         test <@ runOnCloud comp = true @>
 
     //
     //  4. Misc tests
     //
-        
+
 
     [<Test>]
     member t.``4: Logging`` () =
@@ -908,13 +908,13 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
 
             do! Seq.init 20 logSeq |> Cloud.Parallel |> Cloud.Ignore
             do! Cloud.Sleep delayFactor
-        } 
+        }
 
-        let logSize = 
+        let logSize =
             comp
             |> runOnCloudWithLogs
-            |> Seq.filter (fun m -> m.Contains "user cloud message") 
-            |> Seq.length 
+            |> Seq.filter (fun m -> m.Contains "user cloud message")
+            |> Seq.length
 
         test <@ logSize = 2000 @>
 
@@ -1024,11 +1024,11 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     [<Test>]
     member __.``4: Cancellation token: local semantics`` () =
         local {
-            let! cts = 
+            let! cts =
                 let cp = Local.Parallel [ Cloud.CancellationToken ; Cloud.CancellationToken ]
                 Local.Parallel [cp ; cp]
 
-            test 
+            test
                 <@
                     cts
                     |> Array.concat
@@ -1065,7 +1065,7 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
     member __.``4: DomainLocal`` () =
         let domainLocal = DomainLocal.Create(local { let! w = Cloud.CurrentWorker in return Guid.NewGuid(), w })
         cloud {
-            let! results = Cloud.ParallelEverywhere domainLocal.Value 
+            let! results = Cloud.ParallelEverywhere domainLocal.Value
             let! results' = Cloud.ParallelEverywhere domainLocal.Value
             return test <@ set results' = set results @>
         } |> runOnCloud
@@ -1081,8 +1081,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 do! Cloud.ParallelEverywhere(cloud { return getRefHashCode large}) |> Cloud.Ignore
                 let! hashCodes = Cloud.Parallel [for _ in 1  .. 5 * workerCount -> cloud { return getRefHashCode large } ]
                 let length =
-                    hashCodes 
-                    |> Seq.distinct 
+                    hashCodes
+                    |> Seq.distinct
                     |> Seq.length
 
                 test <@ length <= workerCount @>
@@ -1102,14 +1102,14 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 let containerHashCodes, largeHashCodes = Array.unzip hashCodes
                 let containerHashCodeCount =
                     containerHashCodes
-                    |> Seq.distinct 
+                    |> Seq.distinct
                     |> Seq.length
-                    
+
                 test <@ containerHashCodeCount > 4 * workerCount @>
 
                 let largeHashCodeCount =
-                    largeHashCodes 
-                    |> Seq.distinct 
+                    largeHashCodes
+                    |> Seq.distinct
                     |> Seq.length
 
                 test <@ largeHashCodeCount <= workerCount @>
@@ -1128,8 +1128,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 let! hashCodes = Cloud.Parallel [for _ in 1  .. 5 * workerCount -> cloud { return getRefHashCode large } ]
 
                 let hashCodeCount =
-                    hashCodes 
-                    |> Seq.distinct 
+                    hashCodes
+                    |> Seq.distinct
                     |> Seq.length
 
                 test <@ hashCodeCount <= workerCount @>
@@ -1149,8 +1149,8 @@ type ``Cloud Tests`` (parallelismFactor : int, delayFactor : int) as self =
                 let! hashCodes = Cloud.Parallel [for _ in 1  .. 5 * workerCount -> cloud { return getRefHashCode large } ]
 
                 let hashCodeCount =
-                    hashCodes 
-                    |> Seq.distinct 
+                    hashCodes
+                    |> Seq.distinct
                     |> Seq.length
 
                 test <@ hashCodeCount <= workerCount @>
