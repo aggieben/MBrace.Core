@@ -18,7 +18,7 @@ open MBrace.Library
 /// ICloudCollection wrapper for serializable IEnumerables
 [<Sealed; DataContract>]
 type SequenceCollection<'T> (seq : seq<'T>) =
-    static let getCount (seq : seq<'T>) = 
+    static let getCount (seq : seq<'T>) =
         match seq with
         | :? ('T list) as ts -> ts.Length
         | :? ICollection<'T> as c -> c.Count
@@ -62,19 +62,19 @@ type ConcatenatedCollection<'T> (partitions : ICloudCollection<'T> []) =
         member x.IsKnownSize = partitions |> Array.forall (fun p -> p.IsKnownSize)
         member x.IsKnownCount = partitions |> Array.forall (fun p -> p.IsKnownCount)
         member x.IsMaterialized = partitions |> Array.forall (fun p -> p.IsMaterialized)
-        member x.GetCountAsync(): Async<int64> = async { 
-            let! counts = partitions |> Seq.map (fun p -> p.GetCountAsync()) |> Async.Parallel 
+        member x.GetCountAsync(): Async<int64> = async {
+            let! counts = partitions |> Seq.map (fun p -> p.GetCountAsync()) |> Async.Parallel
             return Array.sum counts
         }
 
-        member x.GetSizeAsync(): Async<int64> = async { 
-            let! counts = partitions |> Seq.map (fun p -> p.GetSizeAsync()) |> Async.Parallel 
+        member x.GetSizeAsync(): Async<int64> = async {
+            let! counts = partitions |> Seq.map (fun p -> p.GetSizeAsync()) |> Async.Parallel
             return Array.sum counts
         }
 
         member x.GetPartitions(): Async<ICloudCollection<'T> []> = async { return partitions }
         member x.PartitionCount: Async<int> = async { return partitions.Length }
-        member x.GetEnumerableAsync(): Async<seq<'T>> = async { 
+        member x.GetEnumerableAsync(): Async<seq<'T>> = async {
             return seq {
                 for p in partitions do
                     let pseq = p.GetEnumerableAsync() |> Async.RunSync
@@ -86,21 +86,21 @@ type ConcatenatedCollection<'T> (partitions : ICloudCollection<'T> []) =
 /// Partitionable HTTP line reader implementation
 [<Sealed; DataContract>]
 type HTTPTextCollection internal (url : string, [<O;D(null:obj)>]?encoding : Encoding, [<O;D(null:obj)>]?range: (int64 * int64)) =
-    
+
     [<DataMember(Name = "URL")>]
     let url = url
     [<DataMember(Name = "Encoding")>]
     let encoding = encoding
     [<DataMember(Name = "Range")>]
     let range = range
-    
-    let getSize () = 
+
+    let getSize () =
         match range with
         | Some (s,e) -> e - s + 1L
         | None ->
             use stream = new SeekableHTTPStream(url)
             stream.GetLength()
-    
+
 
     let toEnumerable () =
         let stream = new SeekableHTTPStream(url)
@@ -189,7 +189,7 @@ type CloudCollection private () =
     /// </summary>
     /// <param name="collections">Input cloud collections.</param>
     static member ExtractPartitions (collections : seq<#ICloudCollection<'T>>) : Async<ICloudCollection<'T> []> = async {
-        let rec extractCollection (c : ICloudCollection<'T>) : Async<seq<ICloudCollection<'T>>> = 
+        let rec extractCollection (c : ICloudCollection<'T>) : Async<seq<ICloudCollection<'T>>> =
             async {
                 match c with
                 | :? IPartitionedCollection<'T> as c ->
@@ -229,7 +229,7 @@ type CloudCollection private () =
         let weight = defaultArg weight (fun w -> w.ProcessorCount)
         let isTargetedWorkerEnabled = defaultArg isTargetedWorkerEnabled true
 
-        let rec aux (accPartitions : (IWorkerRef * ICloudCollection<'T> []) list) 
+        let rec aux (accPartitions : (IWorkerRef * ICloudCollection<'T> []) list)
                     (currWorker : IWorkerRef) (remWorkerSize : int64) (accWorkerCollections : ICloudCollection<'T> list)
                     (remWorkers : (IWorkerRef * int64) list) (remCollections : (ICloudCollection<'T> * int64) list) = async {
 
@@ -244,12 +244,12 @@ type CloudCollection private () =
                     for rw,_ in remWorkers -> (rw, [||]) |]
 
             // remaining worker set exhausted, shoehorn all remaining collections to the current worker.
-            | [], awc, rcs -> 
+            | [], awc, rcs ->
                 let rcs = rcs |> List.map fst |> List.rev
                 return! aux accPartitions currWorker 0L (rcs @ awc) [] []
 
             // next collection is within remaining worker size, include to accumulated collections and update size.
-            | _, _, (c, csz) :: rc when csz <= remWorkerSize -> 
+            | _, _, (c, csz) :: rc when csz <= remWorkerSize ->
                 return! aux accPartitions currWorker (remWorkerSize - csz) (c :: accWorkerCollections) remWorkers rc
 
             // next collection is partitionable that does not fit in current worker, begin dynamic partitioning logic.
@@ -293,10 +293,10 @@ type CloudCollection private () =
                 let intermediatePartitions =
                     [
                         for i = 1 to cpartitions.Length - 2 do
-                            let w,_ = remWorkers.[i - 1] 
+                            let w,_ = remWorkers.[i - 1]
                             yield (w, [| cpartitions.[i] |])
                     ]
-                
+
                 let newCurrWorker, newCurrSize = List.head remWorkers2
                 let remWorkers3 = List.tail remWorkers2
                 return! aux (List.rev (firstPartition :: intermediatePartitions) @ accPartitions) newCurrWorker newCurrSize [lastPartition] remWorkers3 rc
@@ -346,7 +346,7 @@ type CloudCollection private () =
         let coreCount = workers |> Array.sumBy (fun w -> if isTargetedWorkerEnabled then weight w else 1)
         let sizePerCore = totalSize / int64 coreCount
         let rem = ref <| totalSize % int64 coreCount
-        let workers = 
+        let workers =
             [
                 for w in workers do
                     let deg = if isTargetedWorkerEnabled then int64 (weight w) else 1L
@@ -366,7 +366,7 @@ type CloudCollection private () =
     /// </summary>
     /// <param name="collections">PartitionedCollections to be extracted.</param>
     static member ExtractTargetedCollections(collections : seq<#ITargetedPartitionCollection<'T>>) : Async<(IWorkerRef * ICloudCollection<'T> []) []> = async {
-        let rec extractC (w : IWorkerRef, c : ICloudCollection<'T>) : Async<seq<IWorkerRef * ICloudCollection<'T>>> = 
+        let rec extractC (w : IWorkerRef, c : ICloudCollection<'T>) : Async<seq<IWorkerRef * ICloudCollection<'T>>> =
             async {
                 match c with
                 | :? ITargetedPartitionCollection<'T> as tpc ->
@@ -380,15 +380,15 @@ type CloudCollection private () =
                 | c -> return Seq.singleton (w,c)
             }
 
-        and extractCs (cs : seq<IWorkerRef * ICloudCollection<'T>>) : Async<seq<IWorkerRef * ICloudCollection<'T>>> = 
+        and extractCs (cs : seq<IWorkerRef * ICloudCollection<'T>>) : Async<seq<IWorkerRef * ICloudCollection<'T>>> =
             async {
                 let! extracted = cs |> Seq.map extractC |> Async.Parallel
                 return Seq.concat extracted
             }
 
         let! partitions = collections |> Seq.map (fun c -> c.GetTargetedPartitions()) |> Async.Parallel
-        return 
-            partitions 
+        return
+            partitions
             |> Seq.concat
             |> Seq.groupBySequential fst
             |> Array.map (fun (w,ts) -> w, ts |> Array.map snd)

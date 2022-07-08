@@ -19,19 +19,15 @@ type SeekableHTTPStream(url : string, ?client : HttpClient) =
     let mutable position = 0L
     let mutable isDisposed = false
 
-    let ensureNotDisposed() = 
+    let ensureNotDisposed() =
         if isDisposed then raise <| new ObjectDisposedException("SeekableHTTPStream")
 
-    member self.Url = url
+    member _.Url = url
 
-    member self.GetLength() = 
+    member _.GetLength() =
         ensureNotDisposed()
         match length with
         | Some value -> value
-
-    override self.CanRead = ensureNotDisposed(); true
-    override self.CanWrite = ensureNotDisposed(); false
-    override self.CanSeek = ensureNotDisposed(); true
         | None ->
             use request = new HttpRequestMessage(HttpMethod.Head, url)
             async {
@@ -40,12 +36,16 @@ type SeekableHTTPStream(url : string, ?client : HttpClient) =
                 return length.Value
             } |> Async.RunSync
 
+    override _.CanRead = ensureNotDisposed(); true
+    override _.CanWrite = ensureNotDisposed(); false
+    override _.CanSeek = ensureNotDisposed(); true
+
     override self.Length = self.GetLength()
 
-    override self.Position 
+    override _.Position
         with get () = position
 
-        and set (value) = 
+        and set (value) =
             ensureNotDisposed()
             stream.Close()
 
@@ -62,9 +62,9 @@ type SeekableHTTPStream(url : string, ?client : HttpClient) =
 
             position <- value
 
-    override self.Seek(offset : int64, origin : SeekOrigin) = 
+    override self.Seek(offset : int64, origin : SeekOrigin) =
         ensureNotDisposed()
-        let offset = 
+        let offset =
             match origin with
             | SeekOrigin.Begin -> offset
             | SeekOrigin.Current -> position + offset
@@ -72,17 +72,17 @@ type SeekableHTTPStream(url : string, ?client : HttpClient) =
         self.Position <- offset
         offset
 
-    override self.Read(buffer : Byte[], offset : Int32, count : Int32) = 
+    override _.Read(buffer : Byte[], offset : Int32, count : Int32) =
         ensureNotDisposed()
         let n = stream.Read(buffer, offset, count)
         position <- position + int64 n
         n
 
-    override self.SetLength(_ : Int64) = raise <| new NotSupportedException()
-    override self.Write(_ : Byte[], _ : Int32, _ : Int32) = raise <| new NotSupportedException()
-    override self.Flush() = ensureNotDisposed()
+    override _.SetLength(_ : Int64) = raise <| new NotSupportedException()
+    override _.Write(_ : Byte[], _ : Int32, _ : Int32) = raise <| new NotSupportedException()
+    override _.Flush() = ensureNotDisposed()
 
-    override self.Close() = 
+    override _.Close() =
         if not isDisposed then
             base.Close()
             if stream <> null then
