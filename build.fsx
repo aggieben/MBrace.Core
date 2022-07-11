@@ -1,5 +1,5 @@
 ﻿// --------------------------------------------------------------------------------------
-// FAKE build script 
+// FAKE build script
 // --------------------------------------------------------------------------------------
 
 #r "paket: groupref build //"
@@ -27,7 +27,7 @@ type TestCoverage =
     | All = 7
 
 module TestCoverage =
-    let parse(value : string) = 
+    let parse(value : string) =
         let ok, tc = Enum.TryParse<TestCoverage>(value, ignoreCase = true)
         if ok then tc else invalidArg value "invalid test coverage value"
 
@@ -50,6 +50,7 @@ let configuration () = Environment.environVarOrDefault "Configuration" "Release"
 let getTestCoverage () = Environment.environVarOrDefault "TestCoverage" "all" |> TestCoverage.parse
 
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
+printfn "Release: %A" release
 
 // --------------------------------------------------------------------------------------
 // Clean and restore packages
@@ -62,9 +63,9 @@ Target.create "Clean" (fun _ ->
 // Build
 
 Target.create "Build" (fun _ ->
-    DotNet.build (fun opts -> 
-        { opts with 
-            Configuration = configuration() 
+    DotNet.build (fun opts ->
+        { opts with
+            Configuration = configuration()
 
             MSBuildParams =
                 { opts.MSBuildParams with
@@ -104,7 +105,7 @@ Target.create "NuGet.Pack" (fun _ ->
             Configuration = DotNet.BuildConfiguration.Release
             MSBuildParams =
                 { pack.MSBuildParams with
-                    Properties = 
+                    Properties =
                         [("Version", release.NugetVersion)
                          ("PackageReleaseNotes", releaseNotes)] }
         }) __SOURCE_DIRECTORY__
@@ -144,7 +145,7 @@ Target.create "ReleaseGitHub" (fun _ ->
 
     let client =
         match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
-        | null -> 
+        | null ->
             let user =
                 match Environment.environVarOrDefault "github-user" "" with
                 | s when not (String.IsNullOrWhiteSpace s) -> s

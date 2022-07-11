@@ -4,12 +4,11 @@ open System
 open System.Threading
 open System.Linq
 open System.Collections.Generic
-open System.Net
+open System.Net.Http
 open System.Text
 open System.IO
 
 open NUnit.Framework
-open FsCheck
 open Swensen.Unquote.Assertions
 
 open MBrace.Core
@@ -44,7 +43,7 @@ module ``CloudFlow Core property tests`` =
                 inputs
                 |> Partition.partitionBySize (fun i -> async { return abs i }) maxSize
                 |> Async.RunSynchronously
-        
+
             test <@ Array.concat partitions = inputs @>
 
             for p in partitions do
@@ -60,8 +59,8 @@ type ``CloudFlow tests`` () as self =
     let runOnCurrentProcess (workflow : Cloud<'T>) = self.RunLocally(workflow)
 
     /// Urls for running HTTP tests
-    let testUrls = 
-        [| 
+    let testUrls =
+        [|
             "http://www.textfiles.com/etext/AUTHORS/SHAKESPEARE/shakespeare-alls-11.txt";
             "http://www.textfiles.com/etext/AUTHORS/SHAKESPEARE/shakespeare-antony-23.txt";
             "http://www.textfiles.com/etext/AUTHORS/SHAKESPEARE/shakespeare-as-12.txt";
@@ -69,10 +68,10 @@ type ``CloudFlow tests`` () as self =
             "http://www.textfiles.com/etext/AUTHORS/SHAKESPEARE/shakespeare-coriolanus-24.txt";
         |]
 
-    let getHttpFileLineCount (url : string) = 
+    let getHttpFileLineCount (url : string) =
         let mutable lineCount = 0L
-        let client = new WebClient()
-        use stream = client.OpenRead(url)
+        use client = new HttpClient()
+        use stream = client.GetStreamAsync(url) |> Async.AwaitTask |> Async.RunSynchronously
         use reader = new StreamReader(stream)
 
         while reader.ReadLine() <> null do
@@ -107,7 +106,7 @@ type ``CloudFlow tests`` () as self =
     [<Test>]
     member __.``1: PersistedCloudFlow : Randomized StorageLevel-Disk`` () =
         if __.IsSupportedStorageLevel StorageLevel.Disk then
-            let f(xs : int[]) =            
+            let f(xs : int[]) =
                 let x = xs |> CloudFlow.OfArray |> CloudFlow.map ((+)1) |> CloudFlow.persist StorageLevel.Disk |> runOnCloud
                 let y = xs |> Seq.map ((+)1) |> Seq.toArray
                 Assert.AreEqual(y, x.ToEnumerable() |> Seq.toArray)
@@ -146,7 +145,7 @@ type ``CloudFlow tests`` () as self =
     [<Test>]
     member __.``1: PersistedCloudFlow : Simple StorageLevel-MemorySerialized`` () =
         if __.IsSupportedStorageLevel StorageLevel.MemorySerialized then
-            let f(xs : int[]) =            
+            let f(xs : int[]) =
                 let pf = xs |> CloudFlow.OfArray |> CloudFlow.map ((+)1) |> CloudFlow.persist StorageLevel.MemorySerialized |> runOnCloud
                 let ys = pf |> CloudFlow.length |> runOnCloud
                 Assert.AreEqual(ys, xs.LongLength)
@@ -159,11 +158,11 @@ type ``CloudFlow tests`` () as self =
         let persisted = inputs |> CloudFlow.OfArray |> CloudFlow.persist StorageLevel.MemoryAndDisk |> runOnCloud
         let merged = PersistedCloudFlow.Concat(Array.init N (fun _ -> persisted))
         test <@ merged.PartitionCount = N * persisted.PartitionCount @>
-        
+
         let partitions = persisted.GetPartitions() |> Array.map snd
         let mergedPartitions = merged.GetPartitions() |> Array.map snd
-        
-        test 
+
+        test
             <@
                 mergedPartitions
                 |> Seq.countBy (fun p -> p.Id)
@@ -218,13 +217,13 @@ type ``CloudFlow tests`` () as self =
     [<Test>]
     member __.``2: CloudFlow : ofCloudFiles with custom deserializer`` () =
         let f(xs : string [][]) =
-            let cfs = xs 
+            let cfs = xs
                      |> Array.map(fun text -> local { let! path = CloudPath.GetRandomFileName() in return! CloudFile.WriteAllLines(path, text) })
                      |> Cloud.Parallel
                      |> runOnCurrentProcess
 
             let paths = cfs |> Array.map (fun cf -> cf.Path)
-            let x =     CloudFlow.OfCloudFiles(paths, (fun (stream : System.IO.Stream) -> seq { yield stream.Length })) 
+            let x =     CloudFlow.OfCloudFiles(paths, (fun (stream : System.IO.Stream) -> seq { yield stream.Length }))
                         |> CloudFlow.length
                         |> runOnCloud
 
@@ -249,7 +248,7 @@ type ``CloudFlow tests`` () as self =
     [<Test>]
     member __.``2: CloudFlow : ofCloudFiles with ReadLines`` () =
         let f(xs : string [][]) =
-            let cfs = xs 
+            let cfs = xs
                      |> Array.map(fun text -> local { let! path = CloudPath.GetRandomFileName() in return! CloudFile.WriteAllLines(path, text) })
                      |> Cloud.Parallel
                      |> runOnCurrentProcess
@@ -259,7 +258,7 @@ type ``CloudFlow tests`` () as self =
                         |> CloudFlow.toArray
                         |> runOnCloud
                         |> Set.ofArray
-            
+
             let y = cfs |> Array.map (fun f -> __.RunLocally(cloud { return! CloudFile.ReadAllLines f.Path }))
                         |> Seq.collect id
                         |> Set.ofSeq
@@ -270,7 +269,7 @@ type ``CloudFlow tests`` () as self =
     [<Test>]
     member __.``2: CloudFlow : ofCloudFilesByLine with ReadLines`` () =
         let f(xs : string [][]) =
-            let cfs = xs 
+            let cfs = xs
                      |> Array.map(fun text -> local { let! path = CloudPath.GetRandomFileName() in return! CloudFile.WriteAllLines(path, text) })
                      |> Cloud.Parallel
                      |> runOnCurrentProcess
@@ -280,22 +279,22 @@ type ``CloudFlow tests`` () as self =
                         |> CloudFlow.toArray
                         |> runOnCloud
                         |> Set.ofArray
-            
+
             let y = cfs |> Array.map (fun f -> __.RunLocally(cloud { return! CloudFile.ReadAllLines f.Path }))
                         |> Seq.collect id
                         |> Set.ofSeq
 
             Assert.AreEqual(y, x)
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfIOBoundTests, shrink = false)
-    
-    
+
+
     [<Test>]
     member __.``2: CloudFlow : OfCloudFileByLine`` () =
-        
+
         let f(xs : string [], separator : Separator) =
-            let separator = 
+            let separator =
                 match separator with
-                | N -> "\n" 
+                | N -> "\n"
                 | R -> "\r"
                 | RN -> "\r\n"
 
@@ -303,30 +302,30 @@ type ``CloudFlow tests`` () as self =
             let cf = CloudFile.WriteAllText(path, xs |> String.concat separator) |> runOnCurrentProcess
             let path = cf.Path
 
-            let x = 
-                path 
+            let x =
+                path
                 |> CloudFlow.OfCloudFileByLine
                 |> CloudFlow.toArray
                 |> runOnCloud
                 |> Array.sortBy id
-                    
-            
-            let y = 
+
+
+            let y =
                 __.RunLocally(cloud { return! CloudFile.ReadLines cf.Path })
                 |> Seq.sortBy id
                 |> Seq.toArray
-                    
+
             Assert.AreEqual(y, x)
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfIOBoundTests, shrink = false)
 
 
     [<Test>]
     member __.``2: CloudFlow : OfCloudFileByLine with Big TextFile `` () =
-        
+
         let f(count : int, separator : Separator) =
-            let separator = 
+            let separator =
                 match separator with
-                | N -> "\n" 
+                | N -> "\n"
                 | R -> "\r"
                 | RN -> "\r\n"
 
@@ -334,27 +333,27 @@ type ``CloudFlow tests`` () as self =
             let cf = CloudFile.WriteAllText(path, [|1..(Math.Abs(count) * 1000)|] |> Array.map string |> String.concat separator) |> runOnCurrentProcess
             let path = cf.Path
 
-            let x = 
-                path 
+            let x =
+                path
                 |> CloudFlow.OfCloudFileByLine
                 |> CloudFlow.length
                 |> runOnCloud
-                
-            let y = 
+
+            let y =
                 __.RunLocally(cloud { let! lines = CloudFile.ReadLines path in return lines |> Seq.length })
-                            
+
             Assert.AreEqual(y, x)
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfIOBoundTests, shrink = false)
 
     [<Test>]
     member __.``2: CloudFlow : ofCloudFiles with ReadAllLines`` () =
         let f(xs : string [][]) =
-            let cfs = xs 
+            let cfs = xs
                      |> Array.map(fun text -> local { let! path = CloudPath.GetRandomFileName() in return! CloudFile.WriteAllLines(path, text) })
                      |> Cloud.Parallel
                      |> runOnCurrentProcess
 
-            let x = cfs 
+            let x = cfs
                         |> Array.map (fun cf -> cf.Path)
                         |> CloudFlow.OfCloudFileByLine
                         |> CloudFlow.toArray
@@ -374,11 +373,11 @@ type ``CloudFlow tests`` () as self =
             for url in testUrls do
                 let lineCount = getHttpFileLineCount url
 
-                let flowLength = 
+                let flowLength =
                     CloudFlow.OfHttpFileByLine url
                     |> CloudFlow.length
                     |> runOnCloud
-                            
+
                 Assert.AreEqual(lineCount, flowLength)
 
     [<Test>]
@@ -441,7 +440,7 @@ type ``CloudFlow tests`` () as self =
     member __.``2: CloudFlow : fold`` () =
         let f(xs : int[]) =
             let x = xs |> CloudFlow.OfArray |> CloudFlow.map (fun n -> 2 * n) |> CloudFlow.fold (+) (+) (fun () -> 0) |> runOnCloud
-            let y = xs |> Seq.map (fun n -> 2 * n) |> Seq.fold (+) 0 
+            let y = xs |> Seq.map (fun n -> 2 * n) |> Seq.fold (+) 0
             Assert.AreEqual(y, x)
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
 
@@ -607,7 +606,7 @@ type ``CloudFlow tests`` () as self =
                 |> runOnCloud
             let y =
                 xs.Join(ys, (fun x -> x), (fun y -> y), (fun x y -> (x, y))).ToArray()
-                
+
             (x |> Array.sortBy id) = (y |> Array.sortBy id)
 
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
@@ -625,7 +624,7 @@ type ``CloudFlow tests`` () as self =
                 |> runOnCloud
             let y =
                 xs.Join(ys, (fun x -> x), (fun y -> y), (fun x y -> (x, y))).ToArray()
-                
+
             (x |> Array.sortBy id) = (y |> Array.sortBy id)
 
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
@@ -643,7 +642,7 @@ type ``CloudFlow tests`` () as self =
                 |> runOnCloud
             let y =
                 xs.GroupJoin(ys, (fun x -> x), (fun y -> y), (fun x ys -> if Seq.isEmpty ys then Seq.singleton (x, None) else ys |> Seq.map (fun y -> (x, Some y)))).SelectMany(fun x -> x).ToArray()
-                
+
             (x |> Array.sortBy id) = (y |> Array.sortBy id)
 
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
@@ -661,7 +660,7 @@ type ``CloudFlow tests`` () as self =
                 |> runOnCloud
             let y =
                 ys.GroupJoin(xs, (fun y -> y), (fun x -> x),  (fun y xs -> if Seq.isEmpty xs then Seq.singleton (None, y) else xs |> Seq.map (fun x -> (Some x, y)))).SelectMany(fun x -> x).ToArray()
-                
+
             (x |> Array.sortBy id) = (y |> Array.sortBy id)
 
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
@@ -683,7 +682,7 @@ type ``CloudFlow tests`` () as self =
                 ys.GroupJoin(xs, (fun y -> y), (fun x -> x),  (fun y xs -> if Seq.isEmpty xs then Seq.singleton (None, Some y) else xs |> Seq.map (fun x -> (Some x, Some y)))).SelectMany(fun x -> x).ToArray()
             let full = left.Union(right).ToArray()
 
-                
+
             (x |> set) = (full |> set)
 
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
@@ -736,8 +735,8 @@ type ``CloudFlow tests`` () as self =
 
     [<Test>]
     member __.``2: CloudFlow : withDegreeOfParallelism`` () =
-        let f(xs : int[]) = 
-            let r = xs 
+        let f(xs : int[]) =
+            let r = xs
                     |> CloudFlow.OfArray
                     |> CloudFlow.map (fun _ -> System.Diagnostics.Process.GetCurrentProcess().Id)
                     |> CloudFlow.withDegreeOfParallelism 1
@@ -751,8 +750,8 @@ type ``CloudFlow tests`` () as self =
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
 
     [<Test>]
-    member __.``2: CloudFlow : verify multicore utilization`` () = 
-        let f(count : int) = 
+    member __.``2: CloudFlow : verify multicore utilization`` () =
+        let f(count : int) =
             let path = CloudPath.GetRandomFileName() |> runOnCurrentProcess
             let cf = CloudFile.WriteAllLines(path, [|1.. ((abs count + 10) * 1000)|] |> Array.map string) |> runOnCurrentProcess
             let r = cf.Path
@@ -760,10 +759,10 @@ type ``CloudFlow tests`` () as self =
                     |> CloudFlow.map (fun _ -> Thread.CurrentThread.ManagedThreadId)
                     |> CloudFlow.toArray
                     |> runOnCurrentProcess
-                    |> Seq.distinct 
+                    |> Seq.distinct
                     |> Seq.length
             r > 1
-            
+
         try Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfIOBoundTests, shrink = false)
         with e -> Assert.Inconclusive(sprintf "Test failed with %O" e)
 
@@ -771,7 +770,7 @@ type ``CloudFlow tests`` () as self =
     member __.``2: CloudFlow : tryFind`` () =
         let f(xs : int[]) =
             let x = xs |> CloudFlow.OfArray |> CloudFlow.tryFind (fun n -> n = 0) |> runOnCloud
-            let y = xs |> Seq.tryFind (fun n -> n = 0) 
+            let y = xs |> Seq.tryFind (fun n -> n = 0)
             x = y
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
 
@@ -787,7 +786,7 @@ type ``CloudFlow tests`` () as self =
     member __.``2: CloudFlow : tryPick`` () =
         let f(xs : int[]) =
             let x = xs |> CloudFlow.OfArray |> CloudFlow.tryPick (fun n -> if n = 0 then Some n else None) |> runOnCloud
-            let y = xs |> Seq.tryPick (fun n -> if n = 0 then Some n else None) 
+            let y = xs |> Seq.tryPick (fun n -> if n = 0 then Some n else None)
             x = y
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
 
@@ -803,7 +802,7 @@ type ``CloudFlow tests`` () as self =
     member __.``2: CloudFlow : exists`` () =
         let f(xs : int[]) =
             let x = xs |> CloudFlow.OfArray |> CloudFlow.exists (fun n -> n = 0) |> runOnCloud
-            let y = xs |> Seq.exists (fun n -> n = 0) 
+            let y = xs |> Seq.exists (fun n -> n = 0)
             x = y
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
 
@@ -812,7 +811,7 @@ type ``CloudFlow tests`` () as self =
     member __.``2: CloudFlow : forall`` () =
         let f(xs : int[]) =
             let x = xs |> CloudFlow.OfArray |> CloudFlow.forall (fun n -> n = 0) |> runOnCloud
-            let y = xs |> Seq.forall (fun n -> n = 0) 
+            let y = xs |> Seq.forall (fun n -> n = 0)
             x = y
         Check.QuickThrowOnFail(f, maxRuns = __.FsCheckMaxNumberOfTests, shrink = false)
 
@@ -833,14 +832,14 @@ type ``CloudFlow tests`` () as self =
                     let! queue = CloudQueue.New()
                     let! n =
                         Cloud.Choice [
-                            cloud { 
+                            cloud {
                                 for i in [|1..1000|] do
                                     do! queue.EnqueueAsync i
                                     do! Cloud.Sleep(100)
                                 return None
                             };
                             cloud {
-                                let! n =  
+                                let! n =
                                     CloudFlow.OfCloudQueue(queue, 1)
                                     |> CloudFlow.take 2
                                     |> CloudFlow.length
@@ -857,17 +856,17 @@ type ``CloudFlow tests`` () as self =
     member __.``2: CloudFlow : toCloudQueue`` () =
         let f(xs : int[]) =
             let queue = CloudQueue.New() |> runOnCloud
-            let _ = 
+            let _ =
                 xs
                 |> CloudFlow.OfArray
                 |> CloudFlow.map (fun v -> v + 1)
                 |> CloudFlow.toCloudQueue queue
                 |> runOnCloud
 
-            let x = 
+            let x =
                 cloud {
                     let list = ResizeArray<int>()
-                    for _ in xs do 
+                    for _ in xs do
                         let! v = queue.DequeueAsync()
                         list.Add(v)
                     return list
@@ -882,7 +881,7 @@ type ``CloudFlow tests`` () as self =
         let f(xs : int[]) =
             let xs = xs |> Array.map string
             let dir = CloudPath.GetRandomDirectoryName() |> __.RunLocally
-            let cfs = 
+            let cfs =
                 xs
                 |> CloudFlow.OfArray
                 |> CloudFlow.toTextCloudFiles dir
