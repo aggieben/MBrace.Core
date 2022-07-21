@@ -51,3 +51,8 @@ group Build
   nuget Fake.DotNet.Cli         ~> 5.19.0
   nuget Fake.Tools.Git          ~> 5.19.0
   nuget Fake.Api.Github         ~> 5.19.0
+
+group Dogfood
+  source https://www.myget.org/F/aggieben/api/v3/index.json
+
+  nuget MBrace.Thespian >= 1.6.0 prerelease

@@ -1,2 +1,4 @@
-﻿group Test
-  FSharp.Core
+﻿FSharp.Core
+
+group Dogfood
+  MBrace.Thespian
