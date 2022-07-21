@@ -1,3 +1,7 @@
+### 1.6.0-alpha.2
+* Retarget net6 and net48
+* Replace obsoleted usage of WebClient/WebRequest/WebResponse with HttpClient
+
 ### 1.6.0-alpha.1
 * Migrate to dotnet core.
 
@@ -148,7 +152,7 @@
 #### 0.16.0-beta
 * Add support for text-based serializers in MBrace.Core
 * Expose text-based serializer APIs in MBrace.Core
-* Add CloudProcess.Wait, .WaitAny and .WaitAll methods. 
+* Add CloudProcess.Wait, .WaitAny and .WaitAll methods.
 
 #### 0.15.3-beta
 * PersistedSequence performance improvements.

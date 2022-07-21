@@ -71,7 +71,7 @@ module internal WorkerConfiguration =
             UseAppDomainIsolation : bool option
             HeartbeatInterval : TimeSpan option
             HeartbeatThreshold : TimeSpan option
-            // Deserializing ActorRefs in uninitialized thespian states has strange side-effects; 
+            // Deserializing ActorRefs in uninitialized thespian states has strange side-effects;
             // use pickle wrapping for delayed deserialization
             /// ActorRef to parent process that has spawned this process, if applicable.
             Parent : Pickle<ActorRef<WorkerStartupResult>> option
@@ -136,7 +136,7 @@ module internal WorkerConfiguration =
         cloudProcess.EnableRaisingEvents <- true
 
         let awaiter =
-            receiver 
+            receiver
             |> Receiver.toObservable
             |> Observable.merge (cloudProcess.Exited |> Observable.map (fun _ -> ProcessExit cloudProcess.ExitCode))
             |> Async.AwaitObservable
@@ -150,7 +150,7 @@ module internal WorkerConfiguration =
         | ProcessError e -> return raise <| new Exception("Child process responded with exception.", e)
         | Success aref -> return aref
     }
-    
+
     /// Reply to spawning process with provided result
     let replyToParent (logger : ISystemLogger) (config : WorkerConfiguration) (result : WorkerStartupResult) =
         match config.Parent with
@@ -158,6 +158,6 @@ module internal WorkerConfiguration =
             logger.LogInfo "Responding to spawning process."
             try
                 let aref = Config.Serializer.UnPickleTyped p
-                aref <-- result 
+                aref <-- result
             with e -> logger.LogWithException LogLevel.Warning e "Error responding to parent."
         | None -> ()
